@@ -56,6 +56,8 @@ func test() {
 	users := []string{"tom", "dick", "harry", "alice", "bob"}
 	nodes := []string{"node0001.example.com", "node0002.example.com", "node0003.example.com", "node0004.example.com"}
 	instances := []string{"normal", "normal", "normal", "gpu"}
+	resources := []string{"vcore", "memory", "pods", "nvidia.com/gpu", "ephemeral-storage", "hugepages-1Gi", "hugepages-2Mi"}
+	quantities := []uint64{1000, 1024 * 1024 * 1024, 1, 1, 10000000000, 1024 * 1024 * 1024, 2 * 1024 * 1024}
 	resourceIDs.AddSymbol("vcore")
 	resourceIDs.AddSymbol("memory")
 	resourceIDs.AddSymbol("pods")
@@ -63,6 +65,12 @@ func test() {
 	resourceIDs.AddSymbol("ephemeral-storage")
 	resourceIDs.AddSymbol("hugepages-1Gi")
 	resourceIDs.AddSymbol("hugepages-2Mi")
+
+	// generate log entries
+	wal, err := historyserver.NewWriteAheadLogWriter("/tmp/historyserver/wal.dat")
+	if err != nil {
+		panic(err)
+	}
 
 	for i := 0; i < 1000; i++ {
 		log.Log(log.Test).Info("Batch", zap.Int("i", i))
@@ -81,7 +89,30 @@ func test() {
 			userNames.AddSymbol(userName)
 			nodeNames.AddSymbol(nodeName)
 			instanceTypes.AddSymbol(instanceType)
+
+			for i, rid := range resources {
+				ts := time.Now()
+				walEntry := &historyserver.WriteAheadLogEntry{
+					ApplicationID: applicationID,
+					TaskID:        taskID,
+					TaskName:      taskName,
+					UserName:      userName,
+					NodeName:      nodeName,
+					InstanceType:  instanceType,
+					ResourceID:    rid,
+					EventTime:     ts,
+					DurationSecs:  300,
+					Quantity:      quantities[i],
+				}
+				if err := wal.WriteEntry(walEntry); err != nil {
+					panic(err)
+				}
+			}
 		}
+	}
+
+	if err := wal.Close(); err != nil {
+		panic(err)
 	}
 
 	sortedAppIDs := appIDs.Sort()
