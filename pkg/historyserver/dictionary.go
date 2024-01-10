@@ -139,7 +139,7 @@ func NewDictionaryFromFile(filename string) (*Dictionary, error) {
 	defer file.Close()
 	bfile := bufio.NewReader(file)
 	headerLen := make([]byte, 1)
-	bytesRead, err := bfile.Read(headerLen)
+	bytesRead, err := io.ReadFull(bfile, headerLen)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func NewDictionaryFromFile(filename string) (*Dictionary, error) {
 		return nil, errors.New("invalid dictionary header length")
 	}
 	version := make([]byte, headerLen[0])
-	bytesRead, err = bfile.Read(version)
+	bytesRead, err = io.ReadFull(bfile, version)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func NewDictionaryFromFile(filename string) (*Dictionary, error) {
 	}
 	lenBuf := make([]byte, 4)
 	for {
-		bytesRead, err = bfile.Read(lenBuf)
+		bytesRead, err = io.ReadFull(bfile, lenBuf)
 		if err != nil && errors.Is(err, io.EOF) {
 			break
 		}
@@ -177,7 +177,7 @@ func NewDictionaryFromFile(filename string) (*Dictionary, error) {
 		}
 		bytesToRead := binary.BigEndian.Uint32(lenBuf)
 		keyBuf := make([]byte, bytesToRead)
-		bytesRead, err = bfile.Read(keyBuf)
+		bytesRead, err = io.ReadFull(bfile, keyBuf)
 		if err != nil {
 			return nil, err
 		}

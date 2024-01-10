@@ -144,6 +144,47 @@ func test() {
 		panic(err)
 	}
 
+	// read the WAL back in
+	log.Log(log.Test).Info("Reading WAL")
+	walReader, err := historyserver.NewWriteAheadLogReader("/tmp/historyserver/wal.dat")
+	if err != nil {
+		panic(err)
+	}
+	count := 0
+	for {
+		entry, ok, err := walReader.ReadEntry()
+		if err != nil {
+			log.Log(log.Test).Warn("Failed to read WAL entry", zap.Error(err))
+			break
+		}
+		if !ok {
+			log.Log(log.Test).Info("WAL EOF encountered")
+			break
+		}
+		count++
+		if count%10000 == 0 {
+			log.Log(log.Test).Info("Read entries", zap.Int("count", count))
+			log.Log(log.Test).Info("Sample entry",
+				zap.String("applicationID", entry.ApplicationID),
+				zap.String("taskID", entry.TaskID),
+				zap.String("taskName", entry.TaskName),
+				zap.String("userName", entry.UserName),
+				zap.String("nodeName", entry.NodeName),
+				zap.String("instanceType", entry.InstanceType),
+				zap.String("resourceID", entry.ResourceID),
+				zap.Time("EventTime", entry.EventTime),
+				zap.Uint32("DurationSecs", entry.DurationSecs),
+				zap.Uint64("quantity", entry.Quantity))
+		}
+	}
+
+	if err = walReader.Close(); err != nil {
+		panic(err)
+	}
+
+	log.Log(log.Test).Info("Finished reading WAL",
+		zap.Int("count", count), zap.Uint64("size", walReader.GetSize()))
+
 	// once the sorted dictionaries are created, we will need to update the data structures we have created with
 	// the new IDs; this should just involve iterating each entry and looking up the existing key in the old dictionary
 	// and then mapping it to the new ID in the sorted dictionary.

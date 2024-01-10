@@ -22,6 +22,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"io"
 	"os"
 	"time"
 )
@@ -165,7 +166,7 @@ func NewWriteAheadLogReader(fileName string) (*WriteAheadLogReader, error) {
 	}
 	reader := bufio.NewReader(file)
 	headerLen := make([]byte, 1)
-	bytesRead, err := reader.Read(headerLen)
+	bytesRead, err := io.ReadFull(reader, headerLen)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +174,7 @@ func NewWriteAheadLogReader(fileName string) (*WriteAheadLogReader, error) {
 		return nil, errors.New("invalid wal header length")
 	}
 	version := make([]byte, headerLen[0])
-	bytesRead, err = reader.Read(version)
+	bytesRead, err = io.ReadFull(reader, version)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +182,7 @@ func NewWriteAheadLogReader(fileName string) (*WriteAheadLogReader, error) {
 		return nil, errors.New("invalid wal header")
 	}
 	switch string(version) {
-	case DictionaryV1:
+	case WriteAheadLogV1:
 		break
 	default:
 		return nil, errors.New("unknown wal version")
@@ -219,7 +220,7 @@ func (r *WriteAheadLogReader) ReadEntry() (*WriteAheadLogEntry, bool, error) {
 	}
 	// read timestamp
 	eventTimeBuf := make([]byte, 8)
-	bytesRead, err := r.reader.Read(eventTimeBuf)
+	bytesRead, err := io.ReadFull(r.reader, eventTimeBuf)
 	if err != nil {
 		return nil, false, err
 	}
@@ -230,7 +231,7 @@ func (r *WriteAheadLogReader) ReadEntry() (*WriteAheadLogEntry, bool, error) {
 	eventTime := time.Unix(int64(binary.BigEndian.Uint64(eventTimeBuf)), 0)
 	// read duration seconds
 	durationSecsBuf := make([]byte, 4)
-	bytesRead, err = r.reader.Read(durationSecsBuf)
+	bytesRead, err = io.ReadFull(r.reader, durationSecsBuf)
 	if err != nil {
 		return nil, false, err
 	}
@@ -241,7 +242,7 @@ func (r *WriteAheadLogReader) ReadEntry() (*WriteAheadLogEntry, bool, error) {
 	durationSecs := binary.BigEndian.Uint32(durationSecsBuf)
 	// read quantity
 	quantityBuf := make([]byte, 8)
-	bytesRead, err = r.reader.Read(quantityBuf)
+	bytesRead, err = io.ReadFull(r.reader, quantityBuf)
 	if err != nil {
 		return nil, false, err
 	}
@@ -278,7 +279,7 @@ func (r *WriteAheadLogReader) readStrings(count int) ([]string, error) {
 
 	lenBuf := make([]byte, 4)
 	for i := 0; i < count; i++ {
-		bytesRead, err := r.reader.Read(lenBuf)
+		bytesRead, err := io.ReadFull(r.reader, lenBuf)
 		if err != nil {
 			return nil, err
 		}
@@ -288,7 +289,7 @@ func (r *WriteAheadLogReader) readStrings(count int) ([]string, error) {
 		}
 		bytesToRead := binary.BigEndian.Uint32(lenBuf)
 		buf := make([]byte, bytesToRead)
-		bytesRead, err = r.reader.Read(buf)
+		bytesRead, err = io.ReadFull(r.reader, buf)
 		if err != nil {
 			return nil, err
 		}
