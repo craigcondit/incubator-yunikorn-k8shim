@@ -29,8 +29,6 @@ import (
 
 const WriteAheadLogV1 = "YK_WAL_V1"
 
-var WriteAheadLogV1Len = []byte{byte(len(WriteAheadLogV1))}
-
 type WriteAheadLogEntry struct {
 	ApplicationID string
 	TaskID        string
@@ -63,7 +61,7 @@ func NewWriteAheadLogWriter(fileName string) (*WriteAheadLogWriter, error) {
 		return nil, err
 	}
 	writer := bufio.NewWriter(file)
-	if _, err := writer.Write(WriteAheadLogV1Len); err != nil {
+	if err := writer.WriteByte(byte(len(WriteAheadLogV1))); err != nil {
 		file.Close()
 		return nil, err
 	}

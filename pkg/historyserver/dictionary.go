@@ -30,8 +30,6 @@ import (
 
 const DictionaryV1 = "YK_DICT_V1"
 
-var DictionaryV1Len = []byte{byte(len(DictionaryV1))}
-
 type Dictionary struct {
 	entries map[string]uint32
 	keys    []string
@@ -110,7 +108,7 @@ func (d *Dictionary) Save(filename string) error {
 	}
 	defer file.Close()
 	bfile := bufio.NewWriter(file)
-	if _, err := bfile.Write(DictionaryV1Len); err != nil {
+	if err := bfile.WriteByte(byte(len(DictionaryV1))); err != nil {
 		return err
 	}
 	if _, err := bfile.WriteString(DictionaryV1); err != nil {

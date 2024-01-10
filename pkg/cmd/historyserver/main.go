@@ -28,14 +28,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const Metric = "m"
-const ApplicationID = "a"
-const TaskID = "t"
-const NodeID = "n"
-const InstanceTypeID = "i"
-const DurationSec = "d"
-const ResourceType = "r"
-
 func main() {
 	log.Log(log.Test).Info("START")
 	test()
@@ -58,22 +50,23 @@ func test() {
 	instances := []string{"normal", "normal", "normal", "gpu"}
 	resources := []string{"vcore", "memory", "pods", "nvidia.com/gpu", "ephemeral-storage", "hugepages-1Gi", "hugepages-2Mi"}
 	quantities := []uint64{1000, 1024 * 1024 * 1024, 1, 1, 10000000000, 1024 * 1024 * 1024, 2 * 1024 * 1024}
-	resourceIDs.AddSymbol("vcore")
-	resourceIDs.AddSymbol("memory")
-	resourceIDs.AddSymbol("pods")
-	resourceIDs.AddSymbol("nvidia.com/gpu")
-	resourceIDs.AddSymbol("ephemeral-storage")
-	resourceIDs.AddSymbol("hugepages-1Gi")
-	resourceIDs.AddSymbol("hugepages-2Mi")
 
 	// generate log entries
-	wal, err := historyserver.NewWriteAheadLogWriter("/tmp/historyserver/wal.dat")
+	wal, err := historyserver.NewWriteAheadLogWriter("/tmp/historyserver/raw-data.wal")
 	if err != nil {
 		panic(err)
 	}
 
-	for i := 0; i < 1000; i++ {
-		log.Log(log.Test).Info("Batch", zap.Int("i", i))
+	// create an in-memory time series
+	series := historyserver.NewInMemoryTimeSeries()
+
+	records := 0
+	log.Log(log.Test).Info("Generating and processing records")
+	i := 0
+	for i = 0; i < 1000; i++ {
+		if i%100 == 0 {
+			log.Log(log.Test).Info("Batch", zap.Int("i", i), zap.Int("records", records))
+		}
 		for j := 0; j < 100; j++ {
 			applicationID := fmt.Sprintf("application_%04d", j)
 			taskID := uuid.New().String()
@@ -82,71 +75,106 @@ func test() {
 			nodeName := nodes[i%4]
 			instanceType := instances[i%4]
 
-			// register the symbols as we come across them
-			appIDs.AddSymbol(applicationID)
-			taskIDs.AddSymbol(taskID)
-			taskNames.AddSymbol(taskName)
-			userNames.AddSymbol(userName)
-			nodeNames.AddSymbol(nodeName)
-			instanceTypes.AddSymbol(instanceType)
+			startTime := time.Now().Add(-60 * time.Minute)
 
-			for i, rid := range resources {
-				ts := time.Now()
-				walEntry := &historyserver.WriteAheadLogEntry{
-					ApplicationID: applicationID,
-					TaskID:        taskID,
-					TaskName:      taskName,
-					UserName:      userName,
-					NodeName:      nodeName,
-					InstanceType:  instanceType,
-					ResourceID:    rid,
-					EventTime:     ts,
-					DurationSecs:  300,
-					Quantity:      quantities[i],
+			for k := 0; k < 12; k++ {
+				for idx, resourceID := range resources {
+					if j%len(resources) > 3 {
+						continue
+					}
+					records++
+					ts := startTime.Add(time.Duration(5*k) * time.Minute)
+					startTimeSec := uint32(ts.Sub(startTime).Milliseconds() / 1000)
+
+					walEntry := &historyserver.WriteAheadLogEntry{
+						ApplicationID: applicationID,
+						TaskID:        taskID,
+						TaskName:      taskName,
+						UserName:      userName,
+						NodeName:      nodeName,
+						InstanceType:  instanceType,
+						ResourceID:    resourceID,
+						EventTime:     ts,
+						DurationSecs:  300,
+						Quantity:      quantities[idx],
+					}
+					if err := wal.WriteEntry(walEntry); err != nil {
+						panic(err)
+					}
+
+					// register the symbols as we come across them
+					appIDs.AddSymbol(applicationID)
+					taskNames.AddSymbol(taskName)
+					userNames.AddSymbol(userName)
+					nodeNames.AddSymbol(nodeName)
+					instanceTypes.AddSymbol(instanceType)
+					taskIDKey := taskIDs.AddSymbol(taskID)
+					resourceIDKey := resourceIDs.AddSymbol(resourceID)
+
+					// add entry to time series
+					series.PutData(taskIDKey, resourceIDKey, historyserver.DataPoint{
+						StartTimeSecs: startTimeSec,
+						DurationSecs:  300,
+						Quantity:      quantities[idx],
+					})
 				}
-				if err := wal.WriteEntry(walEntry); err != nil {
-					panic(err)
-				}
+
 			}
+
 		}
 	}
+	log.Log(log.Test).Info("Processed all records", zap.Int("batches", i), zap.Int("records", records))
 
 	if err := wal.Close(); err != nil {
 		panic(err)
 	}
+	log.Log(log.Test).Info("WAL closed", zap.Uint64("size", wal.GetSize()))
 
+	log.Log(log.Test).Info("Sorting and writing dictionaries...")
 	sortedAppIDs := appIDs.Sort()
-	if err := sortedAppIDs.Save("/tmp/historyserver/dict-appid.dat"); err != nil {
+	if err := sortedAppIDs.Save("/tmp/historyserver/application-id.dict"); err != nil {
 		panic(err)
 	}
 	sortedTaskIDs := taskIDs.Sort()
-	if err := sortedTaskIDs.Save("/tmp/historyserver/dict-taskid.dat"); err != nil {
+	if err := sortedTaskIDs.Save("/tmp/historyserver/task-id.dict"); err != nil {
 		panic(err)
 	}
 	sortedTaskNames := taskNames.Sort()
-	if err := sortedTaskNames.Save("/tmp/historyserver/dict-taskname.dat"); err != nil {
+	if err := sortedTaskNames.Save("/tmp/historyserver/task-name.dict"); err != nil {
 		panic(err)
 	}
 	sortedUserNames := userNames.Sort()
-	if err := sortedUserNames.Save("/tmp/historyserver/dict-username.dat"); err != nil {
+	if err := sortedUserNames.Save("/tmp/historyserver/user-name.dict"); err != nil {
 		panic(err)
 	}
 	sortedNodeNames := nodeNames.Sort()
-	if err := sortedNodeNames.Save("/tmp/historyserver/dict-nodename.dat"); err != nil {
+	if err := sortedNodeNames.Save("/tmp/historyserver/node-name.dict"); err != nil {
 		panic(err)
 	}
 	sortedInstanceTypes := instanceTypes.Sort()
-	if err := sortedInstanceTypes.Save("/tmp/historyserver/dict-instancetype.dat"); err != nil {
+	if err := sortedInstanceTypes.Save("/tmp/historyserver/instance-type.dict"); err != nil {
 		panic(err)
 	}
 	sortedResourceIDs := resourceIDs.Sort()
-	if err := sortedResourceIDs.Save("/tmp/historyserver/dict-resourceid.dat"); err != nil {
+	if err := sortedResourceIDs.Save("/tmp/historyserver/resource-id.dict"); err != nil {
 		panic(err)
 	}
+	log.Log(log.Test).Info("Done writing dictionaries.")
+
+	// re-key the time series data
+	log.Log(log.Test).Info("Rekeying time series...")
+	if ok := series.ReKey(taskIDs, sortedTaskIDs, resourceIDs, sortedResourceIDs); !ok {
+		log.Log(log.Test).Warn("Rekeying time series was incomplete (found missing keys)")
+	}
+	log.Log(log.Test).Info("Rekeying time series complete.")
+
+	// save the time series data (and primary key
+	log.Log(log.Test).Info("Writing time series to disk...")
+	series.Save("/tmp/historyserver/metrics-pk.index", "/tmp/historyserver/metrics.data")
 
 	// read the WAL back in
 	log.Log(log.Test).Info("Reading WAL")
-	walReader, err := historyserver.NewWriteAheadLogReader("/tmp/historyserver/wal.dat")
+	walReader, err := historyserver.NewWriteAheadLogReader("/tmp/historyserver/raw-data.wal")
 	if err != nil {
 		panic(err)
 	}
@@ -162,7 +190,7 @@ func test() {
 			break
 		}
 		count++
-		if count%10000 == 0 {
+		if count%100000 == 0 {
 			log.Log(log.Test).Info("Read entries", zap.Int("count", count))
 			log.Log(log.Test).Info("Sample entry",
 				zap.String("applicationID", entry.ApplicationID),
