@@ -103,20 +103,28 @@ func test() {
 					}
 
 					// register the symbols as we come across them
-					appIDs.AddSymbol(applicationID)
-					taskNames.AddSymbol(taskName)
-					userNames.AddSymbol(userName)
-					nodeNames.AddSymbol(nodeName)
-					instanceTypes.AddSymbol(instanceType)
+					appIDKey := appIDs.AddSymbol(applicationID)
+					taskNameKey := taskNames.AddSymbol(taskName)
+					userNameKey := userNames.AddSymbol(userName)
+					nodeNameKey := nodeNames.AddSymbol(nodeName)
+					instanceTypeKey := instanceTypes.AddSymbol(instanceType)
 					taskIDKey := taskIDs.AddSymbol(taskID)
 					resourceIDKey := resourceIDs.AddSymbol(resourceID)
 
 					// add entry to time series
-					series.PutData(taskIDKey, resourceIDKey, historyserver.DataPoint{
-						StartTimeSecs: startTimeSec,
-						DurationSecs:  300,
-						Quantity:      quantities[idx],
-					})
+					series.PutData(taskIDKey, resourceIDKey,
+						historyserver.TSMetadata{
+							ApplicationID: appIDKey,
+							UserName:      userNameKey,
+							TaskName:      taskNameKey,
+							NodeName:      nodeNameKey,
+							InstanceType:  instanceTypeKey,
+						},
+						historyserver.TSData{
+							StartTimeSecs: startTimeSec,
+							DurationSecs:  300,
+							Quantity:      quantities[idx],
+						})
 				}
 
 			}
@@ -130,40 +138,56 @@ func test() {
 	}
 	log.Log(log.Test).Info("WAL closed", zap.Uint64("size", wal.GetSize()))
 
+	mapper := historyserver.NewMapper()
+
 	log.Log(log.Test).Info("Sorting and writing dictionaries...")
 	sortedAppIDs := appIDs.Sort()
 	if err := sortedAppIDs.Save("/tmp/historyserver/application-id.dict"); err != nil {
 		panic(err)
 	}
+	mapper.ApplicationIDs(appIDs, sortedAppIDs)
+
 	sortedTaskIDs := taskIDs.Sort()
 	if err := sortedTaskIDs.Save("/tmp/historyserver/task-id.dict"); err != nil {
 		panic(err)
 	}
+	mapper.TaskIDs(taskIDs, sortedTaskIDs)
+
 	sortedTaskNames := taskNames.Sort()
 	if err := sortedTaskNames.Save("/tmp/historyserver/task-name.dict"); err != nil {
 		panic(err)
 	}
+	mapper.TaskNames(taskNames, sortedTaskNames)
+
 	sortedUserNames := userNames.Sort()
 	if err := sortedUserNames.Save("/tmp/historyserver/user-name.dict"); err != nil {
 		panic(err)
 	}
+	mapper.UserNames(userNames, sortedUserNames)
+
 	sortedNodeNames := nodeNames.Sort()
 	if err := sortedNodeNames.Save("/tmp/historyserver/node-name.dict"); err != nil {
 		panic(err)
 	}
+	mapper.NodeNames(nodeNames, sortedNodeNames)
+
 	sortedInstanceTypes := instanceTypes.Sort()
 	if err := sortedInstanceTypes.Save("/tmp/historyserver/instance-type.dict"); err != nil {
 		panic(err)
 	}
+	mapper.InstanceTypes(instanceTypes, sortedInstanceTypes)
+
 	sortedResourceIDs := resourceIDs.Sort()
 	if err := sortedResourceIDs.Save("/tmp/historyserver/resource-id.dict"); err != nil {
 		panic(err)
 	}
+	mapper.ResourceIDs(resourceIDs, sortedResourceIDs)
+
 	log.Log(log.Test).Info("Done writing dictionaries.")
 
 	// re-key the time series data
 	log.Log(log.Test).Info("Rekeying time series...")
-	if ok := series.ReKey(taskIDs, sortedTaskIDs, resourceIDs, sortedResourceIDs); !ok {
+	if ok := series.ReKey(mapper); !ok {
 		log.Log(log.Test).Warn("Rekeying time series was incomplete (found missing keys)")
 	}
 	log.Log(log.Test).Info("Rekeying time series complete.")

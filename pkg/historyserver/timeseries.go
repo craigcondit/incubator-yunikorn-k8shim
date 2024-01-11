@@ -29,48 +29,62 @@ import (
 const IndexV1 = "YK_IDX_V1"
 const TimeSeriesDBV1 = "YK_TSDB_V1"
 
-type DataPoint struct {
+type TSData struct {
 	StartTimeSecs uint32
 	DurationSecs  uint32
 	Quantity      uint64
 }
 
-type TimeSeriesKey struct {
+type TSMetadata struct {
+	ApplicationID uint32
+	UserName      uint32
+	TaskName      uint32
+	NodeName      uint32
+	InstanceType  uint32
+}
+
+type TSKey struct {
 	TaskID     uint32
 	ResourceID uint32
 }
 
 type InMemoryTimeSeries struct {
-	data map[TimeSeriesKey][]DataPoint
-	lock sync.RWMutex
+	metadata map[TSKey]TSMetadata
+	data     map[TSKey][]TSData
+	lock     sync.RWMutex
 }
 
 func NewInMemoryTimeSeries() *InMemoryTimeSeries {
 	return &InMemoryTimeSeries{
-		data: make(map[TimeSeriesKey][]DataPoint),
+		metadata: make(map[TSKey]TSMetadata),
+		data:     make(map[TSKey][]TSData),
 	}
 }
 
-func (t *InMemoryTimeSeries) GetData(taskID uint32, resourceID uint32) ([]DataPoint, bool) {
-	key := TimeSeriesKey{TaskID: taskID, ResourceID: resourceID}
+func (t *InMemoryTimeSeries) GetData(taskID uint32, resourceID uint32) (TSMetadata, []TSData, bool) {
+	key := TSKey{TaskID: taskID, ResourceID: resourceID}
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	data, ok := t.data[key]
-	if !ok {
-		return nil, false
+	meta, ok := t.metadata[key]
+	data, ok2 := t.data[key]
+	if !ok || !ok2 {
+		return TSMetadata{}, nil, false
 	}
-	result := make([]DataPoint, len(data))
-	copy(result, data)
-	return result, true
+	meta2 := meta
+	data2 := make([]TSData, len(data))
+	copy(data2, data)
+	return meta2, data2, true
 }
 
-func (t *InMemoryTimeSeries) PutData(taskID uint32, resourceID uint32, data ...DataPoint) {
-	key := TimeSeriesKey{TaskID: taskID, ResourceID: resourceID}
+func (t *InMemoryTimeSeries) PutData(taskID uint32, resourceID uint32, metadata TSMetadata, data ...TSData) {
+	key := TSKey{TaskID: taskID, ResourceID: resourceID}
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	current, ok := t.data[key]
-	if !ok {
-		current = make([]DataPoint, 0)
+	_, ok := t.metadata[key]
+	current, ok2 := t.data[key]
+	if !ok || !ok2 {
+		t.metadata[key] = metadata
+		current = make([]TSData, 0)
 	}
 	// append data to current list
 	current = append(current, data...)
@@ -92,41 +106,70 @@ func (t *InMemoryTimeSeries) PutData(taskID uint32, resourceID uint32, data ...D
 
 // ReKey generates new keys based on existing data using a set of old and new dictionaries (i.e. unsorted vs. sorted)
 // If there are missing entries in the dictionaries, false will be returned, but the series may be incomplete.
-func (t *InMemoryTimeSeries) ReKey(tidOld, tidNew, ridOld, ridNew *Dictionary) bool {
+func (t *InMemoryTimeSeries) ReKey(mapper *Mapper) bool {
 	result := true
+	var ok bool
+
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	data2 := make(map[TimeSeriesKey][]DataPoint)
+
+	// update metadata
+	meta2 := make(map[TSKey]TSMetadata)
+	for key, value := range t.metadata {
+		key2 := TSKey{}
+		if key2.TaskID, ok = mapper.MapTaskID(key.TaskID); !ok {
+			result = false
+			continue
+		}
+		if key2.ResourceID, ok = mapper.MapResourceID(key.ResourceID); !ok {
+			result = false
+			continue
+		}
+		if meta2[key2], ok = t.reKeyMeta(mapper, value); !ok {
+			result = false
+			continue
+		}
+	}
+	t.metadata = meta2
+
+	// update data
+	data2 := make(map[TSKey][]TSData)
 	for key, value := range t.data {
-		key2 := TimeSeriesKey{}
-		taskIDStr, ok := tidOld.LookupSymbol(key.TaskID)
-		if !ok {
-			// TaskID missing from old dictionary
+		key2 := TSKey{}
+		if key2.TaskID, ok = mapper.MapTaskID(key.TaskID); !ok {
 			result = false
 			continue
 		}
-		key2.TaskID, ok = tidNew.LookupID(taskIDStr)
-		if !ok {
-			// TaskID missing from new dictionary
-			result = false
-			continue
-		}
-		resourceIDStr, ok := ridOld.LookupSymbol(key.ResourceID)
-		if !ok {
-			// ResourceID missing from old dictionary
-			result = false
-			continue
-		}
-		key2.ResourceID, ok = ridNew.LookupID(resourceIDStr)
-		if !ok {
-			// ResourceID missing from new dictionary
+		if key2.ResourceID, ok = mapper.MapResourceID(key.ResourceID); !ok {
 			result = false
 			continue
 		}
 		data2[key2] = value
 	}
 	t.data = data2
+
 	return result
+}
+
+func (t *InMemoryTimeSeries) reKeyMeta(mapper *Mapper, metadata TSMetadata) (TSMetadata, bool) {
+	var ok bool
+	result := TSMetadata{}
+	if result.ApplicationID, ok = mapper.MapApplicationID(metadata.ApplicationID); !ok {
+		return result, false
+	}
+	if result.UserName, ok = mapper.MapUserName(metadata.UserName); !ok {
+		return result, false
+	}
+	if result.TaskName, ok = mapper.MapTaskName(metadata.TaskName); !ok {
+		return result, false
+	}
+	if result.NodeName, ok = mapper.MapNodeName(metadata.NodeName); !ok {
+		return result, false
+	}
+	if result.InstanceType, ok = mapper.MapNodeName(metadata.InstanceType); !ok {
+		return result, false
+	}
+	return result, true
 }
 
 func (t *InMemoryTimeSeries) Save(idxFile string, tsFile string) error {
@@ -168,7 +211,7 @@ func (t *InMemoryTimeSeries) Save(idxFile string, tsFile string) error {
 	dataOffset += uint64(len(TimeSeriesDBV1))
 
 	// get keys and sort
-	keys := make([]TimeSeriesKey, 0, len(t.data))
+	keys := make([]TSKey, 0, len(t.data))
 	for k := range t.data {
 		keys = append(keys, k)
 	}
@@ -183,14 +226,20 @@ func (t *InMemoryTimeSeries) Save(idxFile string, tsFile string) error {
 		}
 		return left.ResourceID < right.ResourceID
 	})
-	idxBuf := make([]byte, 0, 20)  // index entry is 20 bytes
+	idxBuf := make([]byte, 0, 40)  // index entry is 40 bytes
 	dataBuf := make([]byte, 0, 16) // data entry is 16 bytes
 
 	for _, k := range keys {
+		m := t.metadata[k]
 		v := t.data[k]
 		idxBuf = idxBuf[:0]
-		idxBuf = binary.BigEndian.AppendUint32(idxBuf, k.ResourceID)
 		idxBuf = binary.BigEndian.AppendUint32(idxBuf, k.TaskID)
+		idxBuf = binary.BigEndian.AppendUint32(idxBuf, k.ResourceID)
+		idxBuf = binary.BigEndian.AppendUint32(idxBuf, m.ApplicationID)
+		idxBuf = binary.BigEndian.AppendUint32(idxBuf, m.UserName)
+		idxBuf = binary.BigEndian.AppendUint32(idxBuf, m.TaskName)
+		idxBuf = binary.BigEndian.AppendUint32(idxBuf, m.NodeName)
+		idxBuf = binary.BigEndian.AppendUint32(idxBuf, m.InstanceType)
 		idxBuf = binary.BigEndian.AppendUint64(idxBuf, dataOffset)
 		idxBuf = binary.BigEndian.AppendUint32(idxBuf, uint32(len(v)))
 		bytesWritten, err := indexWriter.Write(idxBuf)
@@ -209,6 +258,13 @@ func (t *InMemoryTimeSeries) Save(idxFile string, tsFile string) error {
 			}
 			dataOffset += uint64(bytesWritten)
 		}
+	}
+
+	if err := indexWriter.Flush(); err != nil {
+		return err
+	}
+	if err := tsdbWriter.Flush(); err != nil {
+		return err
 	}
 
 	return nil
