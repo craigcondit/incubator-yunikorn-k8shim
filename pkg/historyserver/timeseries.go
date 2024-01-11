@@ -226,33 +226,34 @@ func (t *InMemoryTimeSeries) Save(idxFile string, tsFile string) error {
 		}
 		return left.ResourceID < right.ResourceID
 	})
-	idxBuf := make([]byte, 0, 40)  // index entry is 40 bytes
-	dataBuf := make([]byte, 0, 16) // data entry is 16 bytes
+	buf := make([]byte, 0, 40) // max record size is 40 bytes for either data or index
 
 	for _, k := range keys {
+		// write index entry
 		m := t.metadata[k]
 		v := t.data[k]
-		idxBuf = idxBuf[:0]
-		idxBuf = binary.BigEndian.AppendUint32(idxBuf, k.TaskID)
-		idxBuf = binary.BigEndian.AppendUint32(idxBuf, k.ResourceID)
-		idxBuf = binary.BigEndian.AppendUint32(idxBuf, m.ApplicationID)
-		idxBuf = binary.BigEndian.AppendUint32(idxBuf, m.UserName)
-		idxBuf = binary.BigEndian.AppendUint32(idxBuf, m.TaskName)
-		idxBuf = binary.BigEndian.AppendUint32(idxBuf, m.NodeName)
-		idxBuf = binary.BigEndian.AppendUint32(idxBuf, m.InstanceType)
-		idxBuf = binary.BigEndian.AppendUint64(idxBuf, dataOffset)
-		idxBuf = binary.BigEndian.AppendUint32(idxBuf, uint32(len(v)))
-		bytesWritten, err := indexWriter.Write(idxBuf)
+		buf = buf[:0]
+		buf = binary.BigEndian.AppendUint32(buf, k.TaskID)
+		buf = binary.BigEndian.AppendUint32(buf, k.ResourceID)
+		buf = binary.BigEndian.AppendUint32(buf, m.ApplicationID)
+		buf = binary.BigEndian.AppendUint32(buf, m.UserName)
+		buf = binary.BigEndian.AppendUint32(buf, m.TaskName)
+		buf = binary.BigEndian.AppendUint32(buf, m.NodeName)
+		buf = binary.BigEndian.AppendUint32(buf, m.InstanceType)
+		buf = binary.BigEndian.AppendUint64(buf, dataOffset)
+		buf = binary.BigEndian.AppendUint32(buf, uint32(len(v)))
+		bytesWritten, err := indexWriter.Write(buf)
 		if err != nil {
 			return err
 		}
 		indexOffset += uint64(bytesWritten)
 		for _, entry := range v {
-			dataBuf = dataBuf[:0]
-			dataBuf = binary.BigEndian.AppendUint32(dataBuf, entry.StartTimeSecs)
-			dataBuf = binary.BigEndian.AppendUint32(dataBuf, entry.DurationSecs)
-			dataBuf = binary.BigEndian.AppendUint64(dataBuf, entry.Quantity)
-			bytesWritten, err := tsdbWriter.Write(dataBuf)
+			// write data point
+			buf = buf[:0]
+			buf = binary.BigEndian.AppendUint32(buf, entry.StartTimeSecs)
+			buf = binary.BigEndian.AppendUint32(buf, entry.DurationSecs)
+			buf = binary.BigEndian.AppendUint64(buf, entry.Quantity)
+			bytesWritten, err := tsdbWriter.Write(buf)
 			if err != nil {
 				return err
 			}
