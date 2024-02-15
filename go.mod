@@ -164,6 +164,8 @@ require (
 )
 
 replace (
+	github.com/apache/yunikorn-core => github.com/craigcondit/yunikorn-core v1.4.999
+	github.com/apache/yunikorn-scheduler-interface => github.com/craigcondit/yunikorn-scheduler-interface v1.4.999
 	golang.org/x/lint => golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	k8s.io/api => k8s.io/api v0.29.2
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.29.2

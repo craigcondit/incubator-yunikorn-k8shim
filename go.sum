@@ -13,10 +13,6 @@ github.com/NYTimes/gziphandler v1.1.1 h1:ZUDjpQae29j0ryrS0u/B8HZfJBtBQHjqw2rQ2cq
 github.com/NYTimes/gziphandler v1.1.1/go.mod h1:n/CVRwUEOgIxrgPvAQhUUr9oeUtvrhMomdKFjzJNB0c=
 github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df h1:7RFfzj4SSt6nnvCPbCqijJi1nWCd+TqAT3bYCStRC18=
 github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df/go.mod h1:pSwJ0fSY5KhvocuWSx4fz3BA8OrA1bQn+K1Eli3BRwM=
-github.com/apache/yunikorn-core v0.0.0-20240214143706-a87a46308189 h1:SI7dgCTZP2PW2b5trfNjm7IzgdZncajPv4vlVCr0KQo=
-github.com/apache/yunikorn-core v0.0.0-20240214143706-a87a46308189/go.mod h1:G/qczm6TfnjaeiIiEysvLrMaz2PVp9bIZzxHcU3HrWA=
-github.com/apache/yunikorn-scheduler-interface v0.0.0-20240213122907-834ff5c1f36c h1:u4ckUfYqKfrRGUyvGcyS5lMu1eVOsiMQZafjCcE/tNw=
-github.com/apache/yunikorn-scheduler-interface v0.0.0-20240213122907-834ff5c1f36c/go.mod h1:Ga7qJusiW9E/dRokVGB50sUycR9Oc/yooixJWS0K7ZY=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a h1:idn718Q4B6AGu/h5Sxe66HYVdqdGu2l9Iebqhi/AEoA=
@@ -41,6 +37,10 @@ github.com/coreos/go-semver v0.3.1/go.mod h1:irMmmIw/7yzSRPWryHsK7EYSg09caPQL03V
 github.com/coreos/go-systemd/v22 v22.5.0 h1:RrqgGjYQKalulkV8NGVIfkXQf6YYmOyiJKk8iXXhfZs=
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/cpuguy83/go-md2man/v2 v2.0.2/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
+github.com/craigcondit/yunikorn-core v1.4.999 h1:tl4tnRXwt/4q4yKRhMOmA82iv2kOwhVjEE5mWsNxMD4=
+github.com/craigcondit/yunikorn-core v1.4.999/go.mod h1:aHUW6qKQhtlsO1+XGOkcx2PAQWWK8XFbdHYDsPimZ+s=
+github.com/craigcondit/yunikorn-scheduler-interface v1.4.999 h1:20DrtbSm51KmsjuqXVCICaTMnYxK5bwQf/IQYN76SJA=
+github.com/craigcondit/yunikorn-scheduler-interface v1.4.999/go.mod h1:Ga7qJusiW9E/dRokVGB50sUycR9Oc/yooixJWS0K7ZY=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/creack/pty v1.1.18 h1:n56/Zwd5o6whRC5PMGretI4IdRLlmBXYNjScPaBgsbY=
 github.com/creack/pty v1.1.18/go.mod h1:MOBLtS5ELjhRRrroQr9kyvTxUAFNvYEK993ew/Vr4O4=
